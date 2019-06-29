@@ -58,7 +58,7 @@ def search_emails(service, user_id='me', query=''):
     return messages
 
 
-def get_attachments(service, msg_id, store_dir, user_id='me'):
+def get_attachments(service, msg_id, store_dir, user_id='me', use_sub=False):
     """
     Get and store attachment from email with given id.
     """
@@ -81,10 +81,27 @@ def get_attachments(service, msg_id, store_dir, user_id='me'):
                     ).execute()
                 data = attachment['data']
             file_data = base64.urlsafe_b64decode(data.encode('UTF-8'))
+            if use_sub:
+                fname = '-'.join(
+                    [get_message_subject(message.get('payload', {})), fname])
             path = os.path.join(store_dir, fname)
             with open(path, 'wb') as f:
                 f.write(file_data)
             print('Wrote data to {}'.format(path))
+
+
+def get_message_subject(payload):
+    """
+    Get subject of an email from message payload.
+    """
+    subject = ''
+    headers = payload.get('headers', [])
+    if headers:
+        for header in headers:
+            if header.get('name') != 'Subject':
+                continue
+            subject = header.get('value')
+    return subject
 
 
 def parse_args():
@@ -99,6 +116,11 @@ def parse_args():
         metavar='D',
         type=str,
         help='Directory path to store downloaded attachment files')
+    parser.add_argument(
+        '--use-sub',
+        dest='use_sub',
+        action='store_true',
+        help='Flag to indicate whether to use email subject as file name')
     return parser.parse_args()
 
 
@@ -106,13 +128,14 @@ def main():
     args = parse_args()
     query = args.query
     store_dir = args.store_dir
+    use_sub = args.use_sub
 
     # Start the downloader
     service = get_service()
     messages = search_emails(service, query=query)
     print('Found {} messages'.format(len(messages)))
     for msg in messages:
-        get_attachments(service, msg.get('id', ''), store_dir)
+        get_attachments(service, msg.get('id', ''), store_dir, use_sub=use_sub)
 
 
 if __name__ == '__main__':
